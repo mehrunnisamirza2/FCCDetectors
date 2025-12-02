@@ -1,5 +1,9 @@
 
+#include "XML/Utilities.h"
 #include "DD4hep/DetFactoryHelper.h"
+#include "XML/Layering.h"
+
+#include "FCCHelper.hpp"  // i added 
 
 using dd4hep::Volume;
 using dd4hep::DetElement;
@@ -26,8 +30,6 @@ static dd4hep::Ref_t createTkLayoutTrackerEndcap(dd4hep::Detector& lcdd,
   std::string detName = xmlDet.nameStr();
   DetElement worldDetElement(detName, xmlDet.id());
   DetElement posEcapDetElement(worldDetElement, "posEndcap", 0);
-
-
 
   dd4hep::Assembly envelopeVolume("endcapEnvelope");
   envelopeVolume.setVisAttributes(lcdd.invisible());
@@ -57,7 +59,22 @@ static dd4hep::Ref_t createTkLayoutTrackerEndcap(dd4hep::Detector& lcdd,
       discVolumeVec.emplace_back("disc", discShape, lcdd.air());
       discDetElementVec.emplace_back(posEcapDetElement, "disc" + std::to_string(discCounter), discCounter);
 
+      /////add layer params user extension
+      auto &layerParams =
+           FCCHelper::ensureExtension<dd4hep::rec::VariantParameters>(
+           discDetElementVec.back());
+
+      ///// Add proto layer material
+      unsigned int nMaterialSurfaces = 0;
+      for (dd4hep::xml::Collection_t lmat(xDisc, _Unicode(layer_material)); lmat; ++lmat) {
+        dd4hep::xml::Component x_layer_material = lmat;
+        FCCHelper::xmlToProtoSurfaceMaterial(x_layer_material, layerParams,
+                                             "layer_material", nMaterialSurfaces);    
+        ++nMaterialSurfaces;                                       
+      }
+
       // iterate over rings
+      unsigned int ringCounter = 0;
       for (dd4hep::xml::Collection_t xRingColl(xCurrentRings, _U(ring)); (nullptr != xRingColl); ++xRingColl) {
         Component xRing = static_cast<Component>(xRingColl);
         Component xRingModules = xRing.child(_Unicode(modules));
@@ -67,6 +84,16 @@ static dd4hep::Ref_t createTkLayoutTrackerEndcap(dd4hep::Detector& lcdd,
         Component xModulePropertiesComp = xModuleProperties.child(_Unicode(components));
         Component xSensorProperties = xRing.child(_Unicode(sensorProperties));
 
+        //// added to have rings printed in hierarchy
+        std::string ringName = "ring" + std::to_string(ringCounter);
+        dd4hep::Assembly ringAssembly(ringName);
+        
+        DetElement ringElement(discDetElementVec.back(), ringName, ringCounter);
+
+        PlacedVolume placedRing = discVolumeVec.back().placeVolume(ringAssembly);
+        placedRing.addPhysVolID("ring", ringCounter++);
+        ringElement.setPlacement(placedRing);
+        /////////////////////////////////////////////
 
         // place components in module
         double integratedCompThickness = 0.;
@@ -123,13 +150,18 @@ static dd4hep::Ref_t createTkLayoutTrackerEndcap(dd4hep::Detector& lcdd,
             dd4hep::Translation3D lTranslation(lX, lY, lZ + componentOffset);
             dd4hep::Transform3D myTrafo(lRotation4 * lRotation3 * lRotation2 * lRotation1, lTranslation);
             PlacedVolume placedComponentVolume =
-                discVolumeVec.back().placeVolume(componentVolume, lRotation_PhiPos * myTrafo);
+                ringAssembly.placeVolume(componentVolume, lRotation_PhiPos * myTrafo);
             if (xComp.isSensitive()) {
               placedComponentVolume.addPhysVolID("component", compCounter);
               componentVolume.setSensitiveDetector(sensDet);
-              DetElement moduleDetElement(discDetElementVec.back(), "comp" + std::to_string(compCounter), compCounter);
+              DetElement moduleDetElement(ringElement, "comp" + std::to_string(compCounter), compCounter); //added ringElement in place of discDetElementVec.back()
               moduleDetElement.setPlacement(placedComponentVolume);
               ++compCounter;
+
+              // Add the sensor extension
+              auto &params = FCCHelper::ensureExtension<dd4hep::rec::VariantParameters>(
+                moduleDetElement);
+              params.set<std::string>("axis_definitions", "XZY");
             }
           }
           integratedCompThickness += xComp.thickness();
@@ -163,6 +195,12 @@ static dd4hep::Ref_t createTkLayoutTrackerEndcap(dd4hep::Detector& lcdd,
   posEcapDetElement.setPlacement(placedEnvelopeVolume);
   negEcapDetElement.setPlacement(placedNegEnvelopeVolume);
   worldDetElement.add(negEcapDetElement);
+  
+  ////set type flags
+  dd4hep::xml::setDetectorTypeFlag(xmlElement, posEcapDetElement); 
+  dd4hep::xml::setDetectorTypeFlag(xmlElement, negEcapDetElement); 
+
+
   // top of the hierarchy
   PlacedVolume mplv = lcdd.pickMotherVolume(worldDetElement).placeVolume(bothEndcaps);
   worldDetElement.setPlacement(mplv);

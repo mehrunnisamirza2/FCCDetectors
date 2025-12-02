@@ -24,13 +24,19 @@
   </define>
   <include ref="./FCChh_DectDimensions.xml" />
   <include ref="./FCChh_Visualisation.xml" />
+  
+  <!--added for now-->
+  <include ref="./FCChhMaterialBinning.xml"/>
 
   <!-- Including the sub-detectors / volume definitions -->
   <!-- To be used in case you are not using the tkLayout tracker (which contains the beamtube)
   -->
 
-  <include ref="./FCChh_BeamTube.xml" />
-  <include ref="../../DetTrackerSimple/compact/Tracker.xml" />
+  <!-- <include ref="./FCChh_BeamTube.xml" />  -->
+
+  <!-- ***** Version3 ***** -->
+  <include ref="../../DetFCChhTrackerTkLayout/compact/Tracker.xml" />
+
 
   <!--
     These can be used as replacement if you want to use only a sub-set of detectors:
@@ -41,4 +47,5 @@
     <include ref="../../DetCommon/compact/HcalAir.xml" />
     <include ref="./FCChh_MuonAir.xml" />
 -->
+
 </lccdd>

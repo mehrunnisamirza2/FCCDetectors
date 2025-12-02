@@ -1,7 +1,9 @@
 
-
-
 #include "DD4hep/DetFactoryHelper.h"
+#include "XML/Utilities.h"
+#include "XML/Layering.h"
+
+#include "FCCHelper.hpp"  // i added 
 
 using dd4hep::Volume;
 using dd4hep::DetElement;
@@ -15,6 +17,7 @@ static dd4hep::Ref_t createTkLayoutTrackerBarrel(dd4hep::Detector& lcdd,
                                                  dd4hep::xml::Handle_t xmlElement,
                                                  dd4hep::SensitiveDetector sensDet) {
   // shorthands
+
   dd4hep::xml::DetElement xmlDet = static_cast<dd4hep::xml::DetElement>(xmlElement);
   Dimension dimensions(xmlDet.dimensions());
   // get sensitive detector type from xml
@@ -26,6 +29,22 @@ static dd4hep::Ref_t createTkLayoutTrackerBarrel(dd4hep::Detector& lcdd,
   // has min/max dimensions of tracker for visualization etc.
   std::string detectorName = xmlDet.nameStr();
   DetElement topDetElement(detectorName, xmlDet.id());
+
+  
+  std::cout << "Detector element name:" << detectorName << std::endl; //*comment out if not needed*/
+  dd4hep::xml::setDetectorTypeFlag(xmlElement, topDetElement) ; //set type flags
+  auto &params = FCCHelper::ensureExtension<dd4hep::rec::VariantParameters>(
+    topDetElement);  /// i added 
+
+  
+  ////add valume boundary material
+  for (dd4hep::xml::Collection_t bmat(xmlDet, _Unicode(boundary_material)); bmat; ++bmat) {
+       dd4hep::xml::Component x_boundary_material = bmat;
+       FCCHelper::xmlToProtoSurfaceMaterial(x_boundary_material, params,
+                                             "boundary_material");
+
+  }
+
   dd4hep::Tube topVolumeShape(dimensions.rmin(), dimensions.rmax(), (dimensions.zmax() - dimensions.zmin()) * 0.5);
   Volume topVolume(detectorName, topVolumeShape, lcdd.air());
   topVolume.setVisAttributes(lcdd.invisible());
@@ -51,6 +70,27 @@ static dd4hep::Ref_t createTkLayoutTrackerBarrel(dd4hep::Detector& lcdd,
     PlacedVolume placedLayerVolume = topVolume.placeVolume(layerVolume);
     placedLayerVolume.addPhysVolID("layer", layerCounter);
     DetElement lay_det(topDetElement, "layer" + std::to_string(layerCounter), layerCounter);
+
+    // add layer params user extension
+    auto &layerParams =
+    FCCHelper::ensureExtension<dd4hep::rec::VariantParameters>(
+      lay_det);
+
+    //add proto layer material material
+    unsigned int nMaterialSurfaces = 0;
+    for (dd4hep::xml::Collection_t lmat(xLayer, _Unicode(layer_material)); lmat; ++lmat) {
+      dd4hep::xml::Component x_layer_material = lmat;
+      FCCHelper::xmlToProtoSurfaceMaterial(x_layer_material, layerParams,
+                                          "layer_material",  nMaterialSurfaces);
+      ++nMaterialSurfaces;
+    }
+    
+    //set number of pasive surfaces to process
+    if (nMaterialSurfaces >0) {
+      layerParams.set<bool>("passive_surface", true);
+      layerParams.set<int>("passive_surface_count", nMaterialSurfaces);
+    }
+
     lay_det.setPlacement(placedLayerVolume);
     dd4hep::xml::Component xModuleComponentsOdd = xModulePropertiesOdd.child("components");
     integratedModuleComponentThickness = 0;
@@ -102,6 +142,11 @@ static dd4hep::Ref_t createTkLayoutTrackerBarrel(dd4hep::Detector& lcdd,
                 DetElement mod_det(lay_det, "module" + std::to_string(moduleCounter), moduleCounter);
                 mod_det.setPlacement(placedModuleVolume);
                 ++moduleCounter;
+
+              //add the sensor extension
+              auto &params = FCCHelper::ensureExtension<dd4hep::rec::VariantParameters>(
+                mod_det);
+              params.set<std::string>("axis_definitions", "XZY");
               }
             }
           }
@@ -111,6 +156,7 @@ static dd4hep::Ref_t createTkLayoutTrackerBarrel(dd4hep::Detector& lcdd,
     }
     ++layerCounter;
   }
+
   Volume motherVol = lcdd.pickMotherVolume(topDetElement);
   PlacedVolume placedGenericTrackerBarrel = motherVol.placeVolume(topVolume);
   placedGenericTrackerBarrel.addPhysVolID("system", topDetElement.id());
