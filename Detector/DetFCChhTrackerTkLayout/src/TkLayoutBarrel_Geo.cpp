@@ -146,7 +146,9 @@ static dd4hep::Ref_t createTkLayoutTrackerBarrel(dd4hep::Detector& lcdd,
               //add the sensor extension
               auto &params = FCCHelper::ensureExtension<dd4hep::rec::VariantParameters>(
                 mod_det);
-              params.set<std::string>("axis_definitions", "XZy");  
+              // params.set<std::string>("axis_definitions", "XZy");  //works for visualization keep this for now
+              params.set<std::string>("axis_definitions", "XZY");  //try
+
               }
             }
           }

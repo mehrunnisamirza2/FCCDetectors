@@ -1,6 +1,9 @@
 
 
 #include "DD4hep/DetFactoryHelper.h"
+#include "FCCHelper.hpp"  // i added 
+#include "XML/Utilities.h"
+#include "XML/Layering.h"
 
 using dd4hep::Volume;
 using dd4hep::PlacedVolume;
@@ -12,6 +15,11 @@ static dd4hep::Ref_t create_element(dd4hep::Detector& lcdd, xml_h e, dd4hep::Sen
   std::string det_name = x_det.nameStr();
   // Make DetElement
   DetElement beamtube(det_name, x_det.id());
+
+  dd4hep::xml::setDetectorTypeFlag(e, beamtube) ; ///*** I added type flag:**/////
+  auto &params = FCCHelper::ensureExtension<dd4hep::rec::VariantParameters>(
+    beamtube);
+
   dd4hep::xml::Dimension x_det_dim(x_det.dimensions());
   Tube tube_shape(x_det_dim.rmin(), x_det_dim.rmax(), x_det_dim.z());
   Volume tube_vol(det_name, tube_shape, lcdd.material(x_det_dim.attr<std::string>("material")));
